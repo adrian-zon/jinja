@@ -471,18 +471,34 @@ class Environment:
         """Get an item or attribute of an object but prefer the item."""
         try:
             return obj[argument]
-        except (AttributeError, TypeError, LookupError):
-            if isinstance(argument, str):
+        except AttributeError as e:
+            # Use getattr for compatibility with Python < 3.10
+            not_argument = None if argument is not None else "something"
+            if (
+                getattr(e, "obj", {}) is not obj
+                or getattr(e, "name", not_argument) != argument
+            ):
+                raise e
+        except (TypeError, LookupError):
+            pass
+
+        if isinstance(argument, str):
+            try:
+                attr = str(argument)
+            except Exception:
+                pass
+            else:
                 try:
-                    attr = str(argument)
-                except Exception:
-                    pass
-                else:
-                    try:
-                        return getattr(obj, attr)
-                    except AttributeError:
-                        pass
-            return self.undefined(obj=obj, name=argument)
+                    return getattr(obj, attr)
+                except AttributeError as e:
+                    # Use getattr for compatibility with Python < 3.10
+                    not_argument = None if argument is not None else "something"
+                    if (
+                        getattr(e, "obj", {}) is not obj
+                        or getattr(e, "name", not_argument) != argument
+                    ):
+                        raise e
+        return self.undefined(obj=obj, name=argument)
 
     def getattr(self, obj: t.Any, attribute: str) -> t.Any:
         """Get an item or attribute of an object but prefer the attribute.
@@ -490,12 +506,27 @@ class Environment:
         """
         try:
             return getattr(obj, attribute)
-        except AttributeError:
-            pass
+        except AttributeError as e:
+            # Use getattr for compatibility with Python < 3.10
+            if (
+                getattr(e, "obj", {}) is not obj
+                or getattr(e, "name", attribute + "~") != attribute
+            ):
+                raise e
+
         try:
             return obj[attribute]
-        except (TypeError, LookupError, AttributeError):
-            return self.undefined(obj=obj, name=attribute)
+        except AttributeError as e:
+            # Use getattr for compatibility with Python < 3.10
+            if (
+                getattr(e, "obj", {}) is not obj
+                or getattr(e, "name", attribute + "~") != attribute
+            ):
+                raise e
+        except (TypeError, LookupError):
+            pass
+
+        return self.undefined(obj=obj, name=attribute)
 
     def _filter_test_common(
         self,
